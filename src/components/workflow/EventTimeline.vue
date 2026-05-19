@@ -19,7 +19,17 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  selectable: {
+    type: Boolean,
+    default: false,
+  },
+  showPayload: {
+    type: Boolean,
+    default: true,
+  },
 })
+
+const emit = defineEmits(['select'])
 
 const sortedEvents = computed(() => {
   return [...props.events].sort((a, b) => (a.created_at || 0) - (b.created_at || 0))
@@ -66,6 +76,12 @@ async function resolveConfirmation(event, approved) {
     resolving.value[key] = false
   }
 }
+
+function selectEvent(event) {
+  if (props.selectable) {
+    emit('select', event)
+  }
+}
 </script>
 
 <template>
@@ -79,7 +95,11 @@ async function resolveConfirmation(event, approved) {
       <template #dot>
         <component :is="iconFor(event.name)" />
       </template>
-      <div class="event-row">
+      <div
+        class="event-row"
+        :class="{ selectable: selectable }"
+        @click="selectEvent(event)"
+      >
         <div class="event-row-head">
           <a-tag :color="colorFor(event.name)">{{ event.name }}</a-tag>
           <span class="event-time">{{ event.created_at ? new Date(event.created_at * 1000).toLocaleTimeString() : '' }}</span>
@@ -90,7 +110,7 @@ async function resolveConfirmation(event, approved) {
             size="small"
             type="primary"
             :loading="resolving[event.payload.confirmation_id]"
-            @click="resolveConfirmation(event, true)"
+            @click.stop="resolveConfirmation(event, true)"
           >
             批准
           </a-button>
@@ -98,12 +118,12 @@ async function resolveConfirmation(event, approved) {
             size="small"
             danger
             :loading="resolving[event.payload.confirmation_id]"
-            @click="resolveConfirmation(event, false)"
+            @click.stop="resolveConfirmation(event, false)"
           >
             拒绝
           </a-button>
         </a-space>
-        <JsonBlock v-if="!compact" :value="event.payload" />
+        <JsonBlock v-if="showPayload && !compact" :value="event.payload" />
       </div>
     </a-timeline-item>
   </a-timeline>

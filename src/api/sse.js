@@ -19,6 +19,15 @@ export function connectRunEvents(runId, handlers = {}) {
     'plan.step.failed',
     'human.confirmation.requested',
     'human.confirmation.resolved',
+    'llm.started',
+    'llm.delta',
+    'llm.completed',
+    'agent.think',
+    'agent.tool.reasoning',
+    'agent.final',
+    'planner.plan.generated',
+    'planner.replan.reasoning',
+    'planner.final',
   ]
 
   const handleEvent = (event) => {

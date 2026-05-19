@@ -15,7 +15,13 @@ const props = defineProps({
     type: String,
     default: '执行者事件',
   },
+  selectable: {
+    type: Boolean,
+    default: false,
+  },
 })
+
+const emit = defineEmits(['select'])
 
 const filteredEvents = computed(() => {
   if (!props.executorId) return props.events
@@ -38,6 +44,11 @@ const filteredEvents = computed(() => {
       <span>{{ title }}</span>
       <a-tag>{{ executorId || 'all' }}</a-tag>
     </div>
-    <EventTimeline :events="filteredEvents" compact />
+    <EventTimeline
+      :events="filteredEvents"
+      compact
+      :selectable="selectable"
+      @select="event => emit('select', event)"
+    />
   </section>
 </template>
