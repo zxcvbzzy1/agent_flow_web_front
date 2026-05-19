@@ -350,6 +350,13 @@ body {
   font-size: 12px;
 }
 
+.confirmation-actions {
+  padding: 10px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.68);
+  border: 1px solid rgba(29, 36, 51, 0.08);
+}
+
 .embedded-panel {
   min-height: 220px;
   padding: 16px;
@@ -649,4 +656,3 @@ body {
     border-radius: 22px;
   }
 }
-

@@ -1,11 +1,13 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
+import { message } from 'ant-design-vue'
 import {
   CheckCircleOutlined,
   ClockCircleOutlined,
   CloseCircleOutlined,
   NodeIndexOutlined,
 } from '@ant-design/icons-vue'
+import { runsApi } from '@/api/runs'
 import JsonBlock from './JsonBlock.vue'
 
 const props = defineProps({
@@ -22,6 +24,7 @@ const props = defineProps({
 const sortedEvents = computed(() => {
   return [...props.events].sort((a, b) => (a.created_at || 0) - (b.created_at || 0))
 })
+const resolving = ref({})
 
 function colorFor(name = '') {
   if (name.includes('failed')) return 'red'
@@ -41,7 +44,27 @@ function iconFor(name = '') {
 function eventTitle(event) {
   const step = event?.payload?.step
   if (step?.title) return `${event.name} · ${step.title}`
+  if (event?.payload?.tool_name) return `${event.name} · ${event.payload.tool_name}`
   return event.name
+}
+
+function isConfirmationRequest(event) {
+  return event.name === 'human.confirmation.requested' && event.payload?.status === 'pending'
+}
+
+async function resolveConfirmation(event, approved) {
+  const payload = event.payload || {}
+  const key = payload.confirmation_id
+  resolving.value[key] = true
+  try {
+    await runsApi.resolveConfirmation(payload.run_id, payload.confirmation_id, {
+      approved,
+      reason: approved ? '前端批准执行' : '前端拒绝执行',
+    })
+    message.success(approved ? '已批准工具执行' : '已拒绝工具执行')
+  } finally {
+    resolving.value[key] = false
+  }
 }
 </script>
 
@@ -62,9 +85,26 @@ function eventTitle(event) {
           <span class="event-time">{{ event.created_at ? new Date(event.created_at * 1000).toLocaleTimeString() : '' }}</span>
         </div>
         <strong>{{ eventTitle(event) }}</strong>
+        <a-space v-if="isConfirmationRequest(event)" class="confirmation-actions">
+          <a-button
+            size="small"
+            type="primary"
+            :loading="resolving[event.payload.confirmation_id]"
+            @click="resolveConfirmation(event, true)"
+          >
+            批准
+          </a-button>
+          <a-button
+            size="small"
+            danger
+            :loading="resolving[event.payload.confirmation_id]"
+            @click="resolveConfirmation(event, false)"
+          >
+            拒绝
+          </a-button>
+        </a-space>
         <JsonBlock v-if="!compact" :value="event.payload" />
       </div>
     </a-timeline-item>
   </a-timeline>
 </template>
-

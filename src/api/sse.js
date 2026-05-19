@@ -11,6 +11,14 @@ export function connectRunEvents(runId, handlers = {}) {
     'plan.wave.completed',
     'workflow.finished',
     'workflow.failed',
+    'tool.called',
+    'tool.succeeded',
+    'tool.failed',
+    'tool.retrying',
+    'agent.failed',
+    'plan.step.failed',
+    'human.confirmation.requested',
+    'human.confirmation.resolved',
   ]
 
   const handleEvent = (event) => {
@@ -33,4 +41,3 @@ export function connectRunEvents(runId, handlers = {}) {
     close: () => source.close(),
   }
 }
-
