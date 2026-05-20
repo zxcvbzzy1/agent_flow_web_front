@@ -7,5 +7,7 @@ export const agentsApi = {
   create(payload) {
     return http.post('/api/agents', payload)
   },
+  remove(agentId) {
+    return http.delete(`/api/agents/${encodeURIComponent(agentId)}`)
+  },
 }
-

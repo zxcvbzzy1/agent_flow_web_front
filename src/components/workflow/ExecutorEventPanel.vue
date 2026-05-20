@@ -49,6 +49,7 @@ const filteredEvents = computed(() => {
       compact
       :selectable="selectable"
       @select="event => emit('select', event)"
+      
     />
   </section>
 </template>

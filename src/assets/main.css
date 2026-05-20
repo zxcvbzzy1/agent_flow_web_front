@@ -101,6 +101,14 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.76);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.56);
+
+  /* 新增这两行 */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE 和 Edge */
+}
+
+.top-nav::-webkit-scrollbar {
+  display: none; /* 隐藏滚动条 */
 }
 
 .nav-pill {
@@ -591,13 +599,13 @@ body {
   flex-direction: column;
   gap: 14px;
   min-height: 300px;
-  max-height: calc(100vh - 430px);
+  max-height: 100%;
   padding: 18px 4px;
   overflow: auto;
 }
 
 .agent-message-list {
-  max-height: calc(100vh - 390px);
+  max-height: 100%;
   padding-right: 8px;
 }
 

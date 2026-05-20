@@ -147,8 +147,34 @@ function payloadPreview(event) {
     status: payload.status || payload.step?.status,
     respond: payload.respond,
     reason: payload.reason || payload.status_reason,
+    arguments: payload.arguments,
   }
   return Object.fromEntries(Object.entries(preview).filter(([, value]) => value !== undefined && value !== ''))
+}
+
+function convertPlanToString(jsonData) {
+  // 1. 安全检查，防止传入空数据或格式不正确的数据
+  if (!jsonData || !jsonData.steps || !Array.isArray(jsonData.steps)) {
+    return "错误：无效的计划数据格式";
+  }
+
+  const steps = jsonData.steps;
+  
+  // 2. 遍历并映射每一个步骤
+  const lines = steps.map(step => {
+    // 处理依赖项：如果是空数组则显示“无”，否则用逗号拼接
+    const dependsOnStr = step.depends_on && step.depends_on.length > 0 
+      ? step.depends_on.join(', ') 
+      : '无';
+    // 组装单个步骤的中文文本
+    return `步骤 ID: ${step.step_id}
+标题: ${step.title}
+指令说明: ${step.instruction}
+执行器 ID: ${step.executor_id}
+依赖步骤: ${dependsOnStr}`;
+  });
+  // 3. 用双换行和分割线把所有步骤拼接在一起
+  return lines.join('\n----------------------------------------\n');
 }
 
 function compactLlmEvents(events) {
@@ -349,7 +375,7 @@ onMounted(async () => {
       </template>
     </aside>
 
-    <main class="chat-main panel-card agent-chat-main">
+    <main class="chat-main panel-card agent-chat-main" style="max-height: 150vh;">
       <div class="chat-topbar agent-chat-topbar">
         <div>
           <span class="eyebrow">Agent Chat</span>
@@ -457,7 +483,8 @@ onMounted(async () => {
           title="Executor / Tool 事件"
           selectable
           @select="openEvent"
-        />
+          style="max-height: 65vh;overflow-y: auto;" 
+          />
         <a-button class="mt-12" block @click="openEmbeddedRoute" :disabled="!activeRunId">
           新窗口查看该面板
         </a-button>

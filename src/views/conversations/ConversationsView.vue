@@ -1,5 +1,6 @@
 <script setup>
 import { onMounted, ref } from 'vue'
+import { message, Modal } from 'ant-design-vue'
 import JsonBlock from '@/components/workflow/JsonBlock.vue'
 import { useConversationsStore } from '@/stores/conversations'
 
@@ -18,7 +19,22 @@ const columns = [
   { title: '标题', dataIndex: 'title', key: 'title' },
   { title: 'Conversation ID', dataIndex: 'conversation_id', key: 'conversation_id' },
   { title: '创建时间', dataIndex: 'created_at', key: 'created_at' },
+  { title: '操作', key: 'actions', width: 120 },
 ]
+
+function confirmDelete(record) {
+  Modal.confirm({
+    title: '删除会话',
+    content: `确认删除「${record.title}」及其消息、队列、Run 和事件吗？`,
+    okText: '删除',
+    okType: 'danger',
+    cancelText: '取消',
+    async onOk() {
+      await conversations.deleteConversation(record.conversation_id)
+      message.success('会话已删除')
+    },
+  })
+}
 
 onMounted(() => conversations.fetchConversations())
 </script>
@@ -44,7 +60,13 @@ onMounted(() => conversations.fetchConversations())
           row-key="conversation_id"
           :loading="conversations.loading"
           :custom-row="record => ({ onClick: () => select(record) })"
-        />
+        >
+          <template #bodyCell="{ column, record }">
+            <template v-if="column.key === 'actions'">
+              <a-button danger size="small" @click.stop="confirmDelete(record)">删除</a-button>
+            </template>
+          </template>
+        </a-table>
       </a-card>
       <a-card class="panel-card" title="会话详情" :bordered="false">
         <a-tabs>

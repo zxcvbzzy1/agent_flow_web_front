@@ -21,6 +21,10 @@ export const useAgentsStore = defineStore('agents', {
       await this.fetchAgents()
       return response.item
     },
+    async deleteAgent(agentId) {
+      const response = await agentsApi.remove(agentId)
+      await this.fetchAgents()
+      return response.item
+    },
   },
 })
-

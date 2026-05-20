@@ -4,7 +4,6 @@ import { useRoute, useRouter } from 'vue-router'
 import {
   ApiOutlined,
   AppstoreOutlined,
-  CloudUploadOutlined,
   CommentOutlined,
   ControlOutlined,
   DashboardOutlined,
@@ -25,7 +24,6 @@ const system = useSystemStore()
 const selectedKeys = computed(() => {
   const path = route.path
   if (path.startsWith('/chat')) return ['chat']
-  if (path.startsWith('/tools/upload')) return ['tools-upload']
   if (path.startsWith('/tools')) return ['tools']
   if (path.startsWith('/uploads')) return ['uploads']
   if (path.startsWith('/contexts')) return ['contexts']
@@ -41,7 +39,6 @@ const menuItems = [
   { key: 'runs', icon: DeploymentUnitOutlined, label: '编排运行', path: '/runs' },
   { key: 'conversations', icon: AppstoreOutlined, label: '会话队列', path: '/conversations' },
   { key: 'tools', icon: ToolOutlined, label: '工具库', path: '/tools' },
-  { key: 'tools-upload', icon: CloudUploadOutlined, label: '工具上传', path: '/tools/upload' },
   { key: 'uploads', icon: ApiOutlined, label: '文件上传', path: '/uploads' },
   { key: 'contexts', icon: ControlOutlined, label: '上下文', path: '/contexts' },
   { key: 'agents', icon: RobotOutlined, label: 'Agents', path: '/agents' },

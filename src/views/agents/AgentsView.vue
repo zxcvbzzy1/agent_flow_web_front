@@ -1,6 +1,6 @@
 <script setup>
 import { onMounted, reactive } from 'vue'
-import { message } from 'ant-design-vue'
+import { message, Modal } from 'ant-design-vue'
 import { useAgentsStore } from '@/stores/agents'
 
 const agents = useAgentsStore()
@@ -16,11 +16,30 @@ const columns = [
   { title: '名称', dataIndex: 'name', key: 'name' },
   { title: '类型', dataIndex: 'agent_type', key: 'agent_type', width: 120 },
   { title: 'Context', dataIndex: 'context_id', key: 'context_id' },
+  { title: '操作', key: 'actions', width: 120 },
 ]
 
 async function create() {
   await agents.createAgent({ ...form, metadata: {} })
   message.success('Agent 已创建')
+}
+
+function isProtected(record) {
+  return ['default_planner', 'default_executor'].includes(record.agent_id)
+}
+
+function confirmDelete(record) {
+  Modal.confirm({
+    title: '删除 Agent',
+    content: `确认删除「${record.name}」及其关联 runs/events 吗？`,
+    okText: '删除',
+    okType: 'danger',
+    cancelText: '取消',
+    async onOk() {
+      await agents.deleteAgent(record.agent_id)
+      message.success('Agent 已删除')
+    },
+  })
 }
 
 onMounted(() => agents.fetchAgents())
@@ -42,6 +61,11 @@ onMounted(() => agents.fetchAgents())
           <template #bodyCell="{ column, record }">
             <template v-if="column.key === 'agent_type'">
               <a-tag :color="record.agent_type === 'planner' ? 'purple' : 'blue'">{{ record.agent_type }}</a-tag>
+            </template>
+            <template v-if="column.key === 'actions'">
+              <a-button danger size="small" :disabled="isProtected(record)" @click="confirmDelete(record)">
+                删除
+              </a-button>
             </template>
           </template>
         </a-table>
@@ -66,4 +90,3 @@ onMounted(() => agents.fetchAgents())
     </div>
   </section>
 </template>
-

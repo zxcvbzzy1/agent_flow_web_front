@@ -21,6 +21,10 @@ export const useToolsStore = defineStore('tools', {
       await this.fetchTools()
       return response.item
     },
+    async deleteTool(toolId) {
+      const response = await toolsApi.remove(toolId)
+      await this.fetchTools()
+      return response.item
+    },
   },
 })
-

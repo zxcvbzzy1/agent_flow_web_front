@@ -7,5 +7,7 @@ export const toolsApi = {
   upload(payload) {
     return http.post('/api/tools/upload', payload)
   },
+  remove(toolId) {
+    return http.delete(`/api/tools/${encodeURIComponent(toolId)}`)
+  },
 }
-

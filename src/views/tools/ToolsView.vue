@@ -1,10 +1,12 @@
 <script setup>
-import { h, onMounted } from 'vue'
-import { RouterLink } from 'vue-router'
+import { h, onMounted, ref } from 'vue'
+import { message, Modal } from 'ant-design-vue'
 import JsonBlock from '@/components/workflow/JsonBlock.vue'
 import { useToolsStore } from '@/stores/tools'
+import ToolUploadPanel from './ToolUploadPanel.vue'
 
 const tools = useToolsStore()
+const uploadOpen = ref(false)
 
 const columns = [
   { title: '名称', dataIndex: 'name', key: 'name', width: 180 },
@@ -17,7 +19,30 @@ const columns = [
     width: 280,
     customRender: ({ record }) => h('span', record.events?.length || 0),
   },
+  { title: '操作', key: 'actions', width: 130 },
 ]
+
+function canDelete(record) {
+  return record.uploaded === true
+}
+
+function confirmDelete(record) {
+  Modal.confirm({
+    title: '删除工具',
+    content: `确认删除上传工具「${record.name}」吗？`,
+    okText: '删除',
+    okType: 'danger',
+    cancelText: '取消',
+    async onOk() {
+      await tools.deleteTool(record.name)
+      message.success('工具已删除')
+    },
+  })
+}
+
+function handleUploaded() {
+  uploadOpen.value = false
+}
 
 onMounted(() => tools.fetchTools())
 </script>
@@ -29,7 +54,7 @@ onMounted(() => tools.fetchTools())
         <span class="eyebrow">Tool Registry</span>
         <h1>工具库</h1>
       </div>
-      <RouterLink to="/tools/upload"><a-button type="primary">上传工具</a-button></RouterLink>
+      <a-button type="primary" @click="uploadOpen = true">上传工具</a-button>
     </div>
 
     <a-card class="panel-card" :bordered="false">
@@ -49,6 +74,11 @@ onMounted(() => tools.fetchTools())
               <a-tag v-for="event in record.events || []" :key="event">{{ event.split('.').slice(-1)[0] }}</a-tag>
             </a-space>
           </template>
+          <template v-if="column.key === 'actions'">
+            <a-button danger size="small" :disabled="!canDelete(record)" @click="confirmDelete(record)">
+              删除
+            </a-button>
+          </template>
         </template>
         <template #expandedRowRender="{ record }">
           <div class="expanded-grid">
@@ -64,6 +94,15 @@ onMounted(() => tools.fetchTools())
         </template>
       </a-table>
     </a-card>
+
+    <a-modal
+      v-model:open="uploadOpen"
+      title="上传工具声明与源码"
+      width="min(1180px, 96vw)"
+      :footer="null"
+      destroy-on-close
+    >
+      <ToolUploadPanel @uploaded="handleUploaded" />
+    </a-modal>
   </section>
 </template>
-

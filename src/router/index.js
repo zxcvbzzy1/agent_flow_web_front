@@ -23,7 +23,7 @@ const routes = [
       { path: 'dashboard', name: 'dashboard', component: () => import('@/views/dashboard/DashboardView.vue') },
       { path: 'chat', name: 'chat', component: () => import('@/views/chat/ChatView.vue') },
       { path: 'tools', name: 'tools', component: () => import('@/views/tools/ToolsView.vue') },
-      { path: 'tools/upload', name: 'tools-upload', component: () => import('@/views/tools/ToolUploadView.vue') },
+      { path: 'tools/upload', redirect: '/tools' },
       { path: 'uploads', name: 'uploads', component: () => import('@/views/uploads/UploadsView.vue') },
       { path: 'contexts', name: 'contexts', component: () => import('@/views/contexts/ContextsView.vue') },
       { path: 'agents', name: 'agents', component: () => import('@/views/agents/AgentsView.vue') },
@@ -60,4 +60,3 @@ router.beforeEach((to) => {
 })
 
 export default router
-

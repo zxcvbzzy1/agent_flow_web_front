@@ -57,6 +57,15 @@ export const useConversationsStore = defineStore('conversations', {
       await this.fetchQueue(conversationId)
       return response.item
     },
+    async deleteConversation(conversationId) {
+      const response = await conversationsApi.remove(conversationId)
+      if (this.current?.conversation_id === conversationId) {
+        this.current = null
+        this.messages = []
+        this.queue = []
+      }
+      await this.fetchConversations()
+      return response.item
+    },
   },
 })
-

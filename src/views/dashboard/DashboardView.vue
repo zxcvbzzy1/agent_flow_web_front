@@ -68,7 +68,7 @@ onMounted(() => {
         <div class="quick-actions">
           <RouterLink to="/chat"><a-button type="primary">开始聊天</a-button></RouterLink>
           <RouterLink to="/runs"><a-button>创建 Run</a-button></RouterLink>
-          <RouterLink to="/tools/upload"><a-button>上传工具</a-button></RouterLink>
+          <RouterLink to="/tools"><a-button>上传工具</a-button></RouterLink>
           <RouterLink to="/agents"><a-button>管理 Agent</a-button></RouterLink>
         </div>
       </a-card>

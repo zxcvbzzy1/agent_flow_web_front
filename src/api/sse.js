@@ -3,12 +3,12 @@ import { API_BASE_URL } from '@/api/http'
 export function connectRunEvents(runId, handlers = {}) {
   const source = new EventSource(`${API_BASE_URL}/api/runs/${runId}/events`)
   const eventNames = [
-    'workflow.started',
+    // 'workflow.started',
     'plan.generated',
     'wave.completed',
     'plan.replanned',
     'plan.step.observed',
-    'plan.wave.completed',
+    // 'plan.wave.completed',
     'workflow.finished',
     'workflow.failed',
     'tool.called',
@@ -18,14 +18,14 @@ export function connectRunEvents(runId, handlers = {}) {
     'agent.failed',
     'plan.step.failed',
     'human.confirmation.requested',
-    'human.confirmation.resolved',
+    // 'human.confirmation.resolved',
     'llm.started',
     'llm.delta',
     'llm.completed',
     'agent.think',
     'agent.tool.reasoning',
     'agent.final',
-    'planner.plan.generated',
+    // 'planner.plan.generated',
     'planner.replan.reasoning',
     'planner.final',
   ]

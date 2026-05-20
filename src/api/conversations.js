@@ -25,5 +25,7 @@ export const conversationsApi = {
   createRun(conversationId, payload) {
     return http.post(`/api/conversations/${conversationId}/runs`, payload)
   },
+  remove(conversationId) {
+    return http.delete(`/api/conversations/${conversationId}`)
+  },
 }
-
