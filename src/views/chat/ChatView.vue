@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { message } from 'ant-design-vue'
 import {
   AppstoreOutlined,
@@ -11,6 +11,7 @@ import EventTimeline from '@/components/workflow/EventTimeline.vue'
 import ExecutorEventPanel from '@/components/workflow/ExecutorEventPanel.vue'
 import JsonBlock from '@/components/workflow/JsonBlock.vue'
 import { runsApi } from '@/api/runs'
+import { useAutoScroll } from '@/composables/useAutoScroll'
 import { useConversationsStore } from '@/stores/conversations'
 import { useRunsStore } from '@/stores/runs'
 
@@ -20,11 +21,29 @@ const activeRunId = ref('')
 const selectedExecutor = ref('')
 const input = ref('请帮我分析 agent_flow 后端 API 能力')
 const listRef = ref(null)
+const executorOutputRef = ref(null)
+const executorEventsRef = ref(null)
 const conversationRailCollapsed = ref(true)
 const conversationDrawerOpen = ref(false)
 const eventDrawerOpen = ref(false)
 const selectedEvent = ref(null)
 const resolving = ref({})
+const cancelingRun = ref(false)
+const executorOutputPlacement = ref('side')
+const executorPanelTab = ref('outputs')
+const terminalRunStatuses = new Set(['finished', 'failed', 'cancelled'])
+
+const plannerMessageNames = new Set([
+  'planner.plan.generated',
+  'planner.replan.reasoning',
+  'planner.final',
+])
+
+const executorOutputNames = new Set([
+  'agent.think',
+  'agent.tool.reasoning',
+  'agent.final',
+])
 
 const runForm = reactive({
   planner_agent_id: 'default_planner',
@@ -42,8 +61,63 @@ const sortedEvents = computed(() => {
 })
 
 const displayEvents = computed(() => compactLlmEvents(sortedEvents.value))
-const executorEvents = computed(() => displayEvents.value.filter(isExecutorEvent))
-const orchestratorEvents = computed(() => displayEvents.value.filter((event) => !isExecutorEvent(event)))
+const ordinaryEvents = computed(() => {
+  return displayEvents.value.filter((event) => !isPlannerMessageEvent(event) && !isExecutorOutputEvent(event))
+})
+const executorEvents = computed(() => ordinaryEvents.value.filter(isExecutorEvent))
+const orchestratorEvents = computed(() => ordinaryEvents.value.filter((event) => !isExecutorEvent(event)))
+const plannerMessageEvents = computed(() => displayEvents.value.filter(isPlannerMessageEvent))
+const allExecutorOutputEvents = computed(() => displayEvents.value.filter(isExecutorOutputEvent))
+const visibleExecutorOutputEvents = computed(() => {
+  if (executorOutputPlacement.value === 'main') return []
+  return allExecutorOutputEvents.value.filter(matchesSelectedExecutor)
+})
+const mainChatItems = computed(() => {
+  const conversationItems = conversations.messages.map((item) => ({
+    key: `message-${item.message_id}`,
+    kind: 'conversation',
+    created_at: item.created_at || 0,
+    message: item,
+  }))
+  const outputEvents = [
+    ...plannerMessageEvents.value,
+    ...(executorOutputPlacement.value === 'main' ? allExecutorOutputEvents.value : []),
+  ]
+  const outputItems = outputEvents.map((event) => ({
+    key: `agent-output-${event.event_id || `${event.name}-${event.created_at}`}`,
+    kind: 'agent-output',
+    created_at: event.created_at || 0,
+    output: agentOutputMessageFromEvent(event),
+    event,
+  }))
+  const eventItems = orchestratorEvents.value.map((event) => ({
+    key: `event-${event.event_id || `${event.name}-${event.created_at}`}`,
+    kind: 'event',
+    created_at: event.created_at || 0,
+    event,
+  }))
+  return [...conversationItems, ...outputItems, ...eventItems].sort((a, b) => a.created_at - b.created_at)
+})
+const latestExecutorPayload = computed(() => {
+  const latestOutput = visibleExecutorOutputEvents.value.at(-1)
+  const latestEvent = executorEvents.value.at(-1)
+  return latestOutput?.payload || latestEvent?.payload || { status: 'waiting' }
+})
+const activeRunRecord = computed(() => {
+  return runs.current?.run_id === activeRunId.value ? runs.current : null
+})
+const canCancelActiveRun = computed(() => {
+  if (!activeRunId.value || cancelingRun.value) return false
+  const status = activeRunRecord.value?.status
+  return !terminalRunStatuses.has(status)
+})
+const resolvedConfirmationIds = computed(() => {
+  return new Set(
+    currentEvents.value
+      .filter((event) => event.name === 'human.confirmation.resolved' && event.payload?.confirmation_id)
+      .map((event) => event.payload.confirmation_id),
+  )
+})
 
 const runStats = computed(() => {
   const failed = currentEvents.value.filter((event) => event.name?.includes('failed')).length
@@ -62,6 +136,19 @@ const latestQueueRunId = computed(() => {
   return queueWithRun?.run_id || ''
 })
 
+const { scrollToBottom: scrollMainToBottom } = useAutoScroll(
+  listRef,
+  () => mainChatItems.value.length,
+)
+useAutoScroll(
+  executorOutputRef,
+  () => [visibleExecutorOutputEvents.value.length, executorPanelTab.value],
+)
+useAutoScroll(
+  executorEventsRef,
+  () => [executorEvents.value.length, executorPanelTab.value],
+)
+
 const selectedEventMeta = computed(() => {
   const payload = selectedEvent.value?.payload || {}
   const step = payload.step || {}
@@ -79,6 +166,7 @@ function isExecutorEvent(event) {
   const name = event?.name || ''
   const payload = event?.payload || {}
   const step = payload.step || {}
+  if (isPlannerMessageEvent(event) || isExecutorOutputEvent(event)) return false
   if (name.startsWith('planner.')) return false
   if (name.startsWith('llm.')) return payload.agent_type === 'executor'
   if (name.startsWith('agent.')) return payload.agent_type === 'executor'
@@ -87,6 +175,32 @@ function isExecutorEvent(event) {
   }
   if (name.startsWith('tool.') || name === 'agent.failed') return true
   return Boolean(payload.executor_id || step.executor_id || payload.tool_name)
+}
+
+function isPlannerMessageEvent(event) {
+  return plannerMessageNames.has(event?.name)
+}
+
+function isExecutorOutputEvent(event) {
+  if (!executorOutputNames.has(event?.name)) return false
+  const payload = event?.payload || {}
+  if (payload.agent_type === 'planner') return false
+  if (payload.agent_type === 'executor') return true
+  if (payload.executor_id || payload.step?.executor_id || payload.tool_name) return true
+  if (selectedExecutor.value) return JSON.stringify(payload).includes(selectedExecutor.value)
+  return true
+}
+
+function matchesSelectedExecutor(event) {
+  if (!selectedExecutor.value) return true
+  const payload = event?.payload || {}
+  const step = payload.step || {}
+  return (
+    payload.agent_id === selectedExecutor.value ||
+    payload.executor_id === selectedExecutor.value ||
+    step.executor_id === selectedExecutor.value ||
+    JSON.stringify(payload).includes(selectedExecutor.value)
+  )
 }
 
 function eventColor(name = '') {
@@ -130,6 +244,63 @@ function eventSummary(event) {
   if (payload.error) return payload.error
   if (payload.final) return payload.final
   return '查看事件负载'
+}
+
+function agentOutputMessageFromEvent(event) {
+  const payload = event?.payload || {}
+  const name = event?.name || ''
+  if (name === 'planner.plan.generated') {
+    return {
+      role: 'Plan Agent',
+      title: `生成计划 · ${payload.steps?.length || 0} steps`,
+      content: convertPlanToString(payload),
+      tone: 'planner',
+      meta: payload.planner_id || payload.agent_id || 'planner',
+    }
+  }
+  if (name === 'planner.replan.reasoning') {
+    return {
+      role: 'Plan Agent',
+      title: '重规划',
+      content: [payload.action, payload.reason].filter(Boolean).join('\n') || 'Plan Agent 发起重规划',
+      tone: 'planner',
+      meta: payload.planner_id || payload.agent_id || 'planner',
+    }
+  }
+  if (name === 'planner.final') {
+    return {
+      role: 'Plan Agent',
+      title: '最终总结',
+      content: payload.final || payload.content || 'Plan Agent 已完成总结',
+      tone: 'planner final',
+      meta: payload.planner_id || payload.agent_id || 'planner',
+    }
+  }
+  if (name === 'agent.think') {
+    return {
+      role: payload.agent_name || payload.agent_id || 'Executor Agent',
+      title: '思考',
+      content: payload.think || payload.content || 'Agent 正在思考',
+      tone: 'executor think',
+      meta: payload.agent_id || payload.executor_id || 'executor',
+    }
+  }
+  if (name === 'agent.tool.reasoning') {
+    return {
+      role: payload.agent_name || payload.agent_id || 'Executor Agent',
+      title: `工具决策${payload.tool_name ? ` · ${payload.tool_name}` : ''}`,
+      content: payload.reasoning || payload.reason || `准备调用工具 ${payload.tool_name || ''}`.trim(),
+      tone: 'executor reasoning',
+      meta: payload.agent_id || payload.executor_id || payload.tool_name || 'executor',
+    }
+  }
+  return {
+    role: payload.agent_name || payload.agent_id || 'Executor Agent',
+    title: '执行结果',
+    content: payload.final || payload.finish_reason || payload.content || 'Agent 已完成',
+    tone: 'executor final',
+    meta: payload.agent_id || payload.executor_id || 'executor',
+  }
 }
 
 function payloadPreview(event) {
@@ -250,8 +421,7 @@ async function sendMessage() {
   })
   await conversations.enqueue(conversation.conversation_id, { message_id: messageItem.message_id })
   input.value = ''
-  await nextTick()
-  listRef.value?.scrollTo?.({ top: listRef.value.scrollHeight, behavior: 'smooth' })
+  scrollMainToBottom()
 }
 
 async function startRun() {
@@ -273,6 +443,17 @@ async function activateRun(runId, runRecord = null) {
   runs.connect(runId)
 }
 
+async function cancelActiveRun() {
+  if (!canCancelActiveRun.value) return
+  cancelingRun.value = true
+  try {
+    await runs.cancelRun(activeRunId.value)
+    message.success('Run 已中断')
+  } finally {
+    cancelingRun.value = false
+  }
+}
+
 async function selectConversation(id) {
   await conversations.selectConversation(id)
   const runId = latestQueueRunId.value || conversations.messages.find((item) => item.run_id)?.run_id || ''
@@ -292,11 +473,21 @@ function openEvent(event) {
 }
 
 function isConfirmationRequest(event) {
-  return event?.name === 'human.confirmation.requested' && event.payload?.status === 'pending'
+  return (
+    event?.name === 'human.confirmation.requested' &&
+    event.payload?.status === 'pending' &&
+    !isConfirmationResolved(event)
+  )
+}
+
+function isConfirmationResolved(event) {
+  const confirmationId = event?.payload?.confirmation_id
+  return Boolean(confirmationId && resolvedConfirmationIds.value.has(confirmationId))
 }
 
 async function resolveSelectedConfirmation(approved) {
   const payload = selectedEvent.value?.payload || {}
+  if (isConfirmationResolved(selectedEvent.value)) return
   if (!payload.run_id || !payload.confirmation_id) return
   resolving.value[payload.confirmation_id] = true
   try {
@@ -393,50 +584,68 @@ onMounted(async () => {
           </a-button>
           <a-button @click="sendMessage" :disabled="!input.trim()">发送</a-button>
           <a-button type="primary" @click="startRun">入队消息创建 Run</a-button>
+          <a-button danger :loading="cancelingRun" :disabled="!canCancelActiveRun" @click="cancelActiveRun">
+            中断 Run
+          </a-button>
         </a-space>
       </div>
 
       <div ref="listRef" class="message-list agent-message-list">
         <a-empty
-          v-if="!conversations.messages.length && !orchestratorEvents.length"
+          v-if="!mainChatItems.length"
           description="还没有消息或事件"
         />
 
-        <div
-          v-for="item in conversations.messages"
-          :key="item.message_id"
-          class="message-bubble"
-          :class="item.role"
-        >
-          <div class="message-meta-row">
-            <a-tag>{{ item.role }}</a-tag>
-            <a-button
-              v-if="item.run_id"
-              size="small"
-              type="link"
-              @click="activateRun(item.run_id)"
-            >
-              Run {{ shortId(item.run_id) }}
-            </a-button>
+        <template v-for="item in mainChatItems" :key="item.key">
+          <div
+            v-if="item.kind === 'conversation'"
+            class="message-bubble"
+            :class="item.message.role"
+          >
+            <div class="message-meta-row">
+              <a-tag>{{ item.message.role }}</a-tag>
+              <a-button
+                v-if="item.message.run_id"
+                size="small"
+                type="link"
+                @click="activateRun(item.message.run_id)"
+              >
+                Run {{ shortId(item.message.run_id) }}
+              </a-button>
+            </div>
+            <p>{{ item.message.content }}</p>
+            <small>{{ item.message.message_id }}</small>
           </div>
-          <p>{{ item.content }}</p>
-          <small>{{ item.message_id }}</small>
-        </div>
 
-        <div
-          v-for="event in orchestratorEvents"
-          :key="event.event_id || `${event.name}-${event.created_at}`"
-          class="message-bubble event-bubble"
-          :class="eventTone(event.name)"
-          @click="openEvent(event)"
-        >
-          <div class="event-bubble-head">
-            <a-tag :color="eventColor(event.name)">{{ event.name }}</a-tag>
-            <span>{{ eventTime(event) }}</span>
+          <div
+            v-else-if="item.kind === 'agent-output'"
+            class="message-bubble agent-output-bubble"
+            :class="item.output.tone"
+            @click="openEvent(item.event)"
+          >
+            <div class="message-meta-row">
+              <a-tag :color="eventColor(item.event.name)">{{ item.output.role }}</a-tag>
+              <a-tag>{{ item.output.title }}</a-tag>
+              <span>{{ eventTime(item.event) }}</span>
+            </div>
+            <p>{{ item.output.content }}</p>
+            <small>{{ item.output.meta }}</small>
           </div>
-          <strong>{{ eventSummary(event) }}</strong>
-          <JsonBlock class="event-bubble-preview" :value="payloadPreview(event)" />
-        </div>
+
+          <div
+            v-else
+            class="message-bubble event-bubble"
+            :class="eventTone(item.event.name)"
+            @click="openEvent(item.event)"
+          >
+            <div class="event-bubble-head">
+              <a-tag :color="eventColor(item.event.name)">{{ item.event.name }}</a-tag>
+              <span>{{ eventTime(item.event) }}</span>
+            </div>
+            <strong>{{ eventSummary(item.event) }}</strong>
+            <JsonBlock class="event-bubble-preview" :value="payloadPreview(item.event)" />
+          </div>
+        </template>
       </div>
 
       <div class="chat-composer agent-composer">
@@ -462,6 +671,14 @@ onMounted(async () => {
           <span>执行者工作台</span>
           <a-tag :color="executorEvents.length ? 'blue' : 'default'">{{ executorEvents.length }} events</a-tag>
         </div>
+        <a-segmented
+          v-model:value="executorOutputPlacement"
+          class="executor-placement-switch"
+          :options="[
+            { label: '输出在右侧', value: 'side' },
+            { label: '合并到主聊天', value: 'main' },
+          ]"
+        />
         <a-input-search
           v-model:value="activeRunId"
           enter-button="连接"
@@ -477,14 +694,52 @@ onMounted(async () => {
       </a-card>
 
       <a-card class="panel-card embedded-slot executor-inspector" :bordered="false">
-        <ExecutorEventPanel
-          :events="executorEvents"
-          :executor-id="selectedExecutor"
-          title="Executor / Tool 事件"
-          selectable
-          @select="openEvent"
-          style="max-height: 65vh;overflow-y: auto;" 
+        <a-segmented
+          v-model:value="executorPanelTab"
+          class="executor-panel-switch"
+          :options="[
+            { label: '输出', value: 'outputs' },
+            { label: '事件', value: 'events' },
+            { label: 'Payload', value: 'payload' },
+          ]"
+        />
+
+        <div v-if="executorPanelTab === 'outputs'" ref="executorOutputRef" class="executor-output-list">
+          <a-empty
+            v-if="!visibleExecutorOutputEvents.length"
+            description="执行者输出默认显示在这里"
           />
+          <article
+            v-for="event in visibleExecutorOutputEvents"
+            :key="event.event_id || `${event.name}-${event.created_at}`"
+            class="executor-output-card"
+            :class="agentOutputMessageFromEvent(event).tone"
+            @click="openEvent(event)"
+          >
+            <div class="message-meta-row">
+              <a-tag :color="eventColor(event.name)">{{ agentOutputMessageFromEvent(event).title }}</a-tag>
+              <span>{{ eventTime(event) }}</span>
+            </div>
+            <p>{{ agentOutputMessageFromEvent(event).content }}</p>
+            <small>{{ agentOutputMessageFromEvent(event).meta }}</small>
+          </article>
+        </div>
+
+        <div v-else-if="executorPanelTab === 'events'" ref="executorEventsRef" class="executor-events-scroll">
+          <ExecutorEventPanel
+            :events="executorEvents"
+            :executor-id="selectedExecutor"
+            title="Executor / Tool 事件"
+            selectable
+            @select="openEvent"
+          />
+        </div>
+
+        <JsonBlock
+          v-else
+          class="executor-payload-block"
+          :value="latestExecutorPayload"
+        />
         <a-button class="mt-12" block @click="openEmbeddedRoute" :disabled="!activeRunId">
           新窗口查看该面板
         </a-button>
@@ -521,6 +776,7 @@ onMounted(async () => {
           <a-button
             type="primary"
             :loading="resolving[selectedEvent.payload.confirmation_id]"
+            :disabled="isConfirmationResolved(selectedEvent)"
             @click="resolveSelectedConfirmation(true)"
           >
             批准
@@ -528,6 +784,7 @@ onMounted(async () => {
           <a-button
             danger
             :loading="resolving[selectedEvent.payload.confirmation_id]"
+            :disabled="isConfirmationResolved(selectedEvent)"
             @click="resolveSelectedConfirmation(false)"
           >
             拒绝

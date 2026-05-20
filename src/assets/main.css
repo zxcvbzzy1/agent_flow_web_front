@@ -669,6 +669,36 @@ body {
   margin-top: 8px;
 }
 
+.agent-output-bubble {
+  align-self: flex-start;
+  width: min(86%, 820px);
+  cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.agent-output-bubble:hover,
+.executor-output-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 16px 34px rgba(34, 47, 72, 0.1);
+}
+
+.agent-output-bubble.planner {
+  background: linear-gradient(135deg, rgba(123, 97, 255, 0.15), rgba(255, 255, 255, 0.78));
+  border-color: rgba(123, 97, 255, 0.14);
+}
+
+.agent-output-bubble.executor,
+.agent-output-bubble.think,
+.agent-output-bubble.reasoning {
+  background: linear-gradient(135deg, rgba(41, 185, 199, 0.14), rgba(255, 255, 255, 0.78));
+  border-color: rgba(41, 185, 199, 0.16);
+}
+
+.agent-output-bubble.final {
+  background: linear-gradient(135deg, rgba(36, 166, 106, 0.14), rgba(255, 255, 255, 0.78));
+  border-color: rgba(36, 166, 106, 0.16);
+}
+
 .message-bubble.user {
   align-self: flex-end;
   background: linear-gradient(135deg, rgba(79, 124, 255, 0.14), rgba(41, 185, 199, 0.1));
@@ -714,6 +744,61 @@ body {
 
 .executor-toolbar .ant-card-body {
   padding: 18px;
+}
+
+.executor-placement-switch,
+.executor-panel-switch {
+  width: 100%;
+  margin: 12px 0;
+}
+
+.executor-output-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 65vh;
+  padding-right: 4px;
+  overflow: auto;
+}
+
+.executor-events-scroll {
+  max-height: 65vh;
+  overflow-y: auto;
+}
+
+.executor-output-card {
+  padding: 14px;
+  border: 1px solid rgba(29, 36, 51, 0.08);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.executor-output-card.think {
+  background: linear-gradient(135deg, rgba(41, 185, 199, 0.12), rgba(255, 255, 255, 0.76));
+}
+
+.executor-output-card.reasoning {
+  background: linear-gradient(135deg, rgba(79, 124, 255, 0.12), rgba(255, 255, 255, 0.76));
+}
+
+.executor-output-card.final {
+  background: linear-gradient(135deg, rgba(36, 166, 106, 0.13), rgba(255, 255, 255, 0.76));
+}
+
+.executor-output-card p {
+  margin: 10px 0;
+  white-space: pre-wrap;
+}
+
+.executor-output-card small {
+  color: #73849a;
+}
+
+.executor-payload-block {
+  max-height: 65vh;
+  overflow: auto;
 }
 
 .executor-inspector,

@@ -7,6 +7,9 @@ export const runsApi = {
   get(runId) {
     return http.get(`/api/runs/${runId}`)
   },
+  cancel(runId) {
+    return http.post(`/api/runs/${runId}/cancel`)
+  },
   confirmations(runId) {
     return http.get(`/api/runs/${runId}/confirmations`)
   },

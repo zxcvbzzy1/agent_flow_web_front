@@ -37,6 +37,17 @@ export const useRunsStore = defineStore('runs', {
         this.loading = false
       }
     },
+    async cancelRun(runId) {
+      this.loading = true
+      try {
+        const response = await runsApi.cancel(runId)
+        this.current = response.item
+        this.disconnect(runId)
+        return response.item
+      } finally {
+        this.loading = false
+      }
+    },
     connect(runId) {
       if (!runId || this.connections[runId]) return
       this.eventsByRun[runId] = this.eventsByRun[runId] || []
@@ -62,4 +73,3 @@ export const useRunsStore = defineStore('runs', {
     },
   },
 })
-

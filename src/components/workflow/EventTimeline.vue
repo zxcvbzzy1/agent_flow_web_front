@@ -35,6 +35,17 @@ const sortedEvents = computed(() => {
   return [...props.events].sort((a, b) => (a.created_at || 0) - (b.created_at || 0))
 })
 const resolving = ref({})
+const locallyResolved = ref({})
+
+const resolvedConfirmationIds = computed(() => {
+  const ids = new Set(
+    props.events
+      .filter((event) => event.name === 'human.confirmation.resolved' && event.payload?.confirmation_id)
+      .map((event) => event.payload.confirmation_id),
+  )
+  Object.keys(locallyResolved.value).forEach((id) => ids.add(id))
+  return ids
+})
 
 function colorFor(name = '') {
   if (name.includes('failed')) return 'red'
@@ -62,15 +73,22 @@ function isConfirmationRequest(event) {
   return event.name === 'human.confirmation.requested' && event.payload?.status === 'pending'
 }
 
+function isConfirmationResolved(event) {
+  const confirmationId = event?.payload?.confirmation_id
+  return Boolean(confirmationId && resolvedConfirmationIds.value.has(confirmationId))
+}
+
 async function resolveConfirmation(event, approved) {
   const payload = event.payload || {}
   const key = payload.confirmation_id
+  if (!payload.run_id || !key || isConfirmationResolved(event)) return
   resolving.value[key] = true
   try {
     await runsApi.resolveConfirmation(payload.run_id, payload.confirmation_id, {
       approved,
       reason: approved ? '前端批准执行' : '前端拒绝执行',
     })
+    locallyResolved.value = { ...locallyResolved.value, [key]: true }
     message.success(approved ? '已批准工具执行' : '已拒绝工具执行')
   } finally {
     resolving.value[key] = false
@@ -110,6 +128,7 @@ function selectEvent(event) {
             size="small"
             type="primary"
             :loading="resolving[event.payload.confirmation_id]"
+            :disabled="isConfirmationResolved(event) || resolving[event.payload.confirmation_id]"
             @click.stop="resolveConfirmation(event, true)"
           >
             批准
@@ -118,6 +137,7 @@ function selectEvent(event) {
             size="small"
             danger
             :loading="resolving[event.payload.confirmation_id]"
+            :disabled="isConfirmationResolved(event) || resolving[event.payload.confirmation_id]"
             @click.stop="resolveConfirmation(event, false)"
           >
             拒绝
