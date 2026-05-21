@@ -1,6 +1,9 @@
 import http from '@/api/http'
 
 export const runsApi = {
+  list() {
+    return http.get('/api/runs')
+  },
   create(payload) {
     return http.post('/api/runs', payload)
   },

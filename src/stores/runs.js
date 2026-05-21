@@ -5,6 +5,7 @@ import { connectRunEvents } from '@/api/sse'
 export const useRunsStore = defineStore('runs', {
   state: () => ({
     current: null,
+    items: [],
     eventsByRun: {},
     connections: {},
     loading: false,
@@ -13,12 +14,23 @@ export const useRunsStore = defineStore('runs', {
     currentEvents: (state) => state.current ? state.eventsByRun[state.current.run_id] || [] : [],
   },
   actions: {
+    async fetchRuns() {
+      this.loading = true
+      try {
+        const response = await runsApi.list()
+        this.items = response.items || []
+        return this.items
+      } finally {
+        this.loading = false
+      }
+    },
     async createRun(payload) {
       this.loading = true
       try {
         const response = await runsApi.create(payload)
         this.current = response.item
         this.eventsByRun[response.item.run_id] = this.eventsByRun[response.item.run_id] || []
+        await this.fetchRuns()
         if (payload.auto_start !== false) {
           this.connect(response.item.run_id)
         }

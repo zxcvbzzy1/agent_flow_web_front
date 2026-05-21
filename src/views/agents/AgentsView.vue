@@ -1,14 +1,22 @@
 <script setup>
-import { onMounted, reactive } from 'vue'
+import { computed, onMounted, reactive, watch } from 'vue'
 import { message, Modal } from 'ant-design-vue'
 import { useAgentsStore } from '@/stores/agents'
+import { useContextsStore } from '@/stores/contexts'
 
 const agents = useAgentsStore()
+const contexts = useContextsStore()
 const form = reactive({
   name: '新的执行者',
   agent_type: 'executor',
   context_id: 'default_executor',
   role_prompt: '',
+})
+
+const contextOptions = computed(() => contexts.items)
+const matchingContexts = computed(() => {
+  const preferredKind = form.agent_type === 'planner' ? 'planner' : 'executor'
+  return contextOptions.value.filter((item) => item.kind === preferredKind)
 })
 
 const columns = [
@@ -22,6 +30,13 @@ const columns = [
 async function create() {
   await agents.createAgent({ ...form, metadata: {} })
   message.success('Agent 已创建')
+}
+
+function pickDefaultContext() {
+  const target = form.agent_type === 'planner' ? 'default_planner' : 'default_executor'
+  const exact = contextOptions.value.find((item) => item.context_id === target)
+  const fallback = matchingContexts.value[0]
+  form.context_id = exact?.context_id || fallback?.context_id || form.context_id
 }
 
 function isProtected(record) {
@@ -42,7 +57,12 @@ function confirmDelete(record) {
   })
 }
 
-onMounted(() => agents.fetchAgents())
+watch(() => form.agent_type, pickDefaultContext)
+
+onMounted(async () => {
+  await Promise.all([agents.fetchAgents(), contexts.fetchContexts()])
+  pickDefaultContext()
+})
 </script>
 
 <template>
@@ -52,7 +72,10 @@ onMounted(() => agents.fetchAgents())
         <span class="eyebrow">Agent Factory</span>
         <h1>Agent 管理</h1>
       </div>
-      <a-button @click="agents.fetchAgents">刷新</a-button>
+      <a-space>
+        <a-button @click="agents.fetchAgents">刷新 Agents</a-button>
+        <a-button @click="contexts.fetchContexts">刷新 Contexts</a-button>
+      </a-space>
     </div>
 
     <div class="two-column-grid wide-left">
@@ -61,6 +84,9 @@ onMounted(() => agents.fetchAgents())
           <template #bodyCell="{ column, record }">
             <template v-if="column.key === 'agent_type'">
               <a-tag :color="record.agent_type === 'planner' ? 'purple' : 'blue'">{{ record.agent_type }}</a-tag>
+            </template>
+            <template v-if="column.key === 'context_id'">
+              <a-tag>{{ record.context_id }}</a-tag>
             </template>
             <template v-if="column.key === 'actions'">
               <a-button danger size="small" :disabled="isProtected(record)" @click="confirmDelete(record)">
@@ -80,7 +106,23 @@ onMounted(() => agents.fetchAgents())
               <a-select-option value="planner">planner</a-select-option>
             </a-select>
           </a-form-item>
-          <a-form-item label="Context ID"><a-input v-model:value="form.context_id" /></a-form-item>
+          <a-form-item label="Context">
+            <a-select
+              v-model:value="form.context_id"
+              show-search
+              :loading="contexts.loading"
+              option-filter-prop="label"
+            >
+              <a-select-option
+                v-for="context in contextOptions"
+                :key="context.context_id"
+                :value="context.context_id"
+                :label="`${context.name} ${context.context_id} ${context.kind}`"
+              >
+                {{ context.name }} · {{ context.context_id }} · {{ context.kind }}
+              </a-select-option>
+            </a-select>
+          </a-form-item>
           <a-form-item label="Role Prompt">
             <a-textarea v-model:value="form.role_prompt" :rows="8" />
           </a-form-item>
