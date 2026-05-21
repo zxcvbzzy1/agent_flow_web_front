@@ -6,7 +6,6 @@ export const useConversationsStore = defineStore('conversations', {
     items: [],
     current: null,
     messages: [],
-    queue: [],
     loading: false,
   }),
   actions: {
@@ -28,10 +27,7 @@ export const useConversationsStore = defineStore('conversations', {
     async selectConversation(conversationId) {
       const response = await conversationsApi.get(conversationId)
       this.current = response.item
-      await Promise.all([
-        this.fetchMessages(conversationId),
-        this.fetchQueue(conversationId),
-      ])
+      await this.fetchMessages(conversationId)
       return response.item
     },
     async fetchMessages(conversationId) {
@@ -43,18 +39,8 @@ export const useConversationsStore = defineStore('conversations', {
       await this.fetchMessages(conversationId)
       return response.item
     },
-    async enqueue(conversationId, payload = {}) {
-      const response = await conversationsApi.enqueue(conversationId, payload)
-      await this.fetchQueue(conversationId)
-      return response.item
-    },
-    async fetchQueue(conversationId) {
-      const response = await conversationsApi.queue(conversationId)
-      this.queue = response.items || []
-    },
     async createRun(conversationId, payload) {
       const response = await conversationsApi.createRun(conversationId, payload)
-      await this.fetchQueue(conversationId)
       return response.item
     },
     async deleteConversation(conversationId) {
@@ -62,7 +48,6 @@ export const useConversationsStore = defineStore('conversations', {
       if (this.current?.conversation_id === conversationId) {
         this.current = null
         this.messages = []
-        this.queue = []
       }
       await this.fetchConversations()
       return response.item

@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
-import { message } from 'ant-design-vue'
+import { message, Modal } from 'ant-design-vue'
 import JsonBlock from '@/components/workflow/JsonBlock.vue'
 import { useContextsStore } from '@/stores/contexts'
 
@@ -20,7 +20,9 @@ const contextColumns = [
   { title: '类型', dataIndex: 'kind', key: 'kind', width: 100 },
   { title: 'Providers', dataIndex: 'provider_count', key: 'provider_count', width: 110 },
   { title: 'Loaded', dataIndex: 'engine_loaded', key: 'engine_loaded', width: 90 },
+  { title: '操作', key: 'actions', width: 90 },
 ]
+const protectedContextIds = new Set(['default_executor', 'default_planner', 'default_step'])
 
 const providerCatalog = computed(() => contexts.catalogData?.providers || [])
 const strategyCatalog = computed(() => contexts.catalogData?.strategies || [])
@@ -135,6 +137,27 @@ async function selectContext(record) {
   await contexts.getContext(record.context_id)
 }
 
+function isProtectedContext(contextId) {
+  return protectedContextIds.has(contextId)
+}
+
+function confirmDeleteContext(record) {
+  Modal.confirm({
+    title: '删除 ContextEngine',
+    content: `确认删除「${record.name || record.context_id}」吗？被 Agent 或 Run 引用时后端会拒绝删除。`,
+    okText: '删除',
+    okType: 'danger',
+    cancelText: '取消',
+    async onOk() {
+      await contexts.deleteContext(record.context_id)
+      if (lookupId.value === record.context_id) {
+        lookupId.value = contexts.items[0]?.context_id || 'default_executor'
+      }
+      message.success('ContextEngine 已删除')
+    },
+  })
+}
+
 onMounted(async () => {
   await Promise.all([contexts.fetchCatalog(), contexts.fetchContexts()])
   loadTemplate('executor')
@@ -180,6 +203,16 @@ onMounted(async () => {
                   {{ record.engine_loaded ? 'loaded' : 'cold' }}
                 </a-tag>
               </template>
+              <template v-if="column.key === 'actions'">
+                <a-button
+                  size="small"
+                  danger
+                  :disabled="isProtectedContext(record.context_id)"
+                  @click.stop="confirmDeleteContext(record)"
+                >
+                  删除
+                </a-button>
+              </template>
             </template>
           </a-table>
           <a-input-search v-model:value="lookupId" class="mt-16" enter-button="查询" @search="lookup" />
@@ -191,6 +224,17 @@ onMounted(async () => {
             </a-tab-pane>
             <a-tab-pane key="current" tab="Current">
               <JsonBlock :value="contexts.current || { context_id: lookupId }" />
+            </a-tab-pane>
+          </a-tabs>
+        </a-card>
+
+         <a-card class="panel-card" title="Catalog" :bordered="false">
+          <a-tabs>
+            <a-tab-pane key="providers" tab="Providers">
+              <JsonBlock :value="providerCatalog" />
+            </a-tab-pane>
+            <a-tab-pane key="strategies" tab="Strategies">
+              <JsonBlock :value="strategyCatalog" />
             </a-tab-pane>
           </a-tabs>
         </a-card>
@@ -324,23 +368,11 @@ onMounted(async () => {
             </a-card>
           </div>
 
-          <a-button type="primary" html-type="submit" :loading="contexts.loading" style="margin-top: 16px;">创建 ContextEngine</a-button>
+          <a-button type="primary" html-type="button" :loading="contexts.loading" style="margin-top: 16px;" @click="create">
+            创建 ContextEngine
+          </a-button>
         </a-form>
       </a-card>
-
-      <div class="executor-column">
-        <a-card class="panel-card" title="Catalog" :bordered="false">
-          <a-tabs>
-            <a-tab-pane key="providers" tab="Providers">
-              <JsonBlock :value="providerCatalog" />
-            </a-tab-pane>
-            <a-tab-pane key="strategies" tab="Strategies">
-              <JsonBlock :value="strategyCatalog" />
-            </a-tab-pane>
-          </a-tabs>
-        </a-card>
-
-      </div>
     </div>
   </section>
 </template>

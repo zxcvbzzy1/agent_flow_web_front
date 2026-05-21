@@ -291,7 +291,7 @@ body {
 
 .context-console-grid {
   display: grid;
-  grid-template-columns: minmax(300px, 0.72fr) minmax(520px, 1.25fr) minmax(360px, 0.85fr);
+  grid-template-columns: minmax(400px, 0.4fr) minmax(520px,0.6fr);
   gap: 24px;
   align-items: start;
 }

@@ -16,12 +16,6 @@ export const conversationsApi = {
   addMessage(conversationId, payload) {
     return http.post(`/api/conversations/${conversationId}/messages`, payload)
   },
-  enqueue(conversationId, payload = {}) {
-    return http.post(`/api/conversations/${conversationId}/queue`, payload)
-  },
-  queue(conversationId) {
-    return http.get(`/api/conversations/${conversationId}/queue`)
-  },
   createRun(conversationId, payload) {
     return http.post(`/api/conversations/${conversationId}/runs`, payload)
   },

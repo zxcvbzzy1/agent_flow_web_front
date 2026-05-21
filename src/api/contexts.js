@@ -13,4 +13,7 @@ export const contextsApi = {
   get(contextId) {
     return http.get(`/api/contexts/${contextId}`)
   },
+  remove(contextId) {
+    return http.delete(`/api/contexts/${contextId}`)
+  },
 }

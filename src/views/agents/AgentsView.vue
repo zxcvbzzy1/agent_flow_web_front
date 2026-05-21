@@ -10,7 +10,32 @@ const form = reactive({
   name: '新的执行者',
   agent_type: 'executor',
   context_id: 'default_executor',
-  role_prompt: '',
+  role_prompt: `
+你是一个执行者
+
+## 输出格式
+用 JSON 严格按以下格式回复：
+{{
+  "think": "你的思考过程",
+  "tool_calls": [
+    {{
+      "tool_name": "工具名",
+      "arguments": {{"参数名": "参数值"}},
+      "reasoning": "为什么调用这个工具"
+    }}
+  ],
+  "is_finished": false
+}}
+
+## 任务完成时输出
+{{
+  "think": "...",
+  "tool_calls": [],
+  "is_finished": true,
+  "finish_reason": "完成原因",
+  "final": "最终结果"
+}}
+  `,
 })
 
 const contextOptions = computed(() => contexts.items)
@@ -77,8 +102,8 @@ onMounted(async () => {
         <a-button @click="contexts.fetchContexts">刷新 Contexts</a-button>
       </a-space>
     </div>
+    <div>
 
-    <div class="two-column-grid wide-left">
       <a-card class="panel-card" title="Agent 列表" :bordered="false">
         <a-table :columns="columns" :data-source="agents.items" row-key="agent_id" :loading="agents.loading">
           <template #bodyCell="{ column, record }">
@@ -96,9 +121,10 @@ onMounted(async () => {
           </template>
         </a-table>
       </a-card>
-
+    </div>
+    <div class="two-column-grid wide-left">
       <a-card class="panel-card" title="创建 Agent" :bordered="false">
-        <a-form layout="vertical" @finish="create">
+        <a-form layout="vertical" >
           <a-form-item label="名称"><a-input v-model:value="form.name" /></a-form-item>
           <a-form-item label="类型">
             <a-select v-model:value="form.agent_type">
@@ -126,7 +152,7 @@ onMounted(async () => {
           <a-form-item label="Role Prompt">
             <a-textarea v-model:value="form.role_prompt" :rows="8" />
           </a-form-item>
-          <a-button type="primary" html-type="submit">创建</a-button>
+          <a-button type="primary" html-type="submit" @click="create">创建</a-button>
         </a-form>
       </a-card>
     </div>

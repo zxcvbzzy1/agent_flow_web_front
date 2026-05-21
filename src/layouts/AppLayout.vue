@@ -37,7 +37,7 @@ const menuItems = [
   { key: 'dashboard', icon: DashboardOutlined, label: '总览', path: '/dashboard' },
   { key: 'chat', icon: CommentOutlined, label: 'Agent 聊天', path: '/chat' },
   { key: 'runs', icon: DeploymentUnitOutlined, label: '编排运行', path: '/runs' },
-  { key: 'conversations', icon: AppstoreOutlined, label: '会话队列', path: '/conversations' },
+  { key: 'conversations', icon: AppstoreOutlined, label: '会话管理', path: '/conversations' },
   { key: 'tools', icon: ToolOutlined, label: '工具库', path: '/tools' },
   { key: 'uploads', icon: ApiOutlined, label: '文件上传', path: '/uploads' },
   { key: 'contexts', icon: ControlOutlined, label: '上下文', path: '/contexts' },

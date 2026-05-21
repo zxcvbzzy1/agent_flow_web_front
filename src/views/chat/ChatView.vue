@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
-import { message } from 'ant-design-vue'
+import { message, Modal } from 'ant-design-vue'
 import {
   AppstoreOutlined,
   CommentOutlined,
@@ -12,10 +12,14 @@ import ExecutorEventPanel from '@/components/workflow/ExecutorEventPanel.vue'
 import JsonBlock from '@/components/workflow/JsonBlock.vue'
 import { runsApi } from '@/api/runs'
 import { useAutoScroll } from '@/composables/useAutoScroll'
+import { useAgentsStore } from '@/stores/agents'
 import { useConversationsStore } from '@/stores/conversations'
+import { useContextsStore } from '@/stores/contexts'
 import { useRunsStore } from '@/stores/runs'
 
 const conversations = useConversationsStore()
+const agents = useAgentsStore()
+const contexts = useContextsStore()
 const runs = useRunsStore()
 const activeRunId = ref('')
 const selectedExecutor = ref('')
@@ -25,12 +29,14 @@ const executorOutputRef = ref(null)
 const executorEventsRef = ref(null)
 const conversationRailCollapsed = ref(true)
 const conversationDrawerOpen = ref(false)
+const configModalOpen = ref(false)
 const eventDrawerOpen = ref(false)
 const selectedEvent = ref(null)
 const resolving = ref({})
 const cancelingRun = ref(false)
 const executorOutputPlacement = ref('side')
 const executorPanelTab = ref('outputs')
+const chatMode = ref('react')
 const terminalRunStatuses = new Set(['finished', 'failed', 'cancelled'])
 
 const plannerMessageNames = new Set([
@@ -45,11 +51,35 @@ const executorOutputNames = new Set([
   'agent.final',
 ])
 
-const runForm = reactive({
+const reactForm = reactive({
+  executor_agent_id: 'default_executor',
+})
+
+const planForm = reactive({
   planner_agent_id: 'default_planner',
   executor_agent_ids: ['default_executor'],
   context_id: 'default_step',
   max_replan_rounds: 3,
+})
+
+const plannerAgents = computed(() => agents.items.filter((item) => item.agent_type === 'planner'))
+const executorAgents = computed(() => agents.items.filter((item) => item.agent_type === 'executor'))
+const stepContexts = computed(() => contexts.items.filter((item) => item.kind === 'step'))
+const executorOptions = computed(() => {
+  const activeExecutors = runs.current?.executor_agent_ids
+  if (activeExecutors?.length) return activeExecutors
+  if (chatMode.value === 'react') return [reactForm.executor_agent_id].filter(Boolean)
+  return planForm.executor_agent_ids
+})
+const modeConfigSummary = computed(() => {
+  if (chatMode.value === 'react') {
+    return `React · ${agentLabel(reactForm.executor_agent_id)}`
+  }
+  return [
+    `Plan · ${agentLabel(planForm.planner_agent_id)}`,
+    `${planForm.executor_agent_ids.length} executors`,
+    contextLabel(planForm.context_id),
+  ].join(' · ')
 })
 
 const currentEvents = computed(() => {
@@ -131,9 +161,9 @@ const runStats = computed(() => {
   }
 })
 
-const latestQueueRunId = computed(() => {
-  const queueWithRun = [...conversations.queue].reverse().find((item) => item.run_id)
-  return queueWithRun?.run_id || ''
+const latestMessageRunId = computed(() => {
+  const messageWithRun = [...conversations.messages].reverse().find((item) => item.run_id)
+  return messageWithRun?.run_id || ''
 })
 
 const { scrollToBottom: scrollMainToBottom } = useAutoScroll(
@@ -406,6 +436,16 @@ function currentInitial() {
   return title.slice(0, 1).toUpperCase()
 }
 
+function agentLabel(agentId = '') {
+  const agent = agents.items.find((item) => item.agent_id === agentId)
+  return agent?.name || agentId || '-'
+}
+
+function contextLabel(contextId = '') {
+  const context = contexts.items.find((item) => item.context_id === contextId)
+  return context?.name || contextId || '-'
+}
+
 async function ensureConversation() {
   if (conversations.current) return conversations.current
   return conversations.createConversation({ title: 'Agent 对话', metadata: {} })
@@ -413,22 +453,50 @@ async function ensureConversation() {
 
 async function sendMessage() {
   if (!input.value.trim()) return
+  if (!validateRunConfig()) return
   const conversation = await ensureConversation()
   const messageItem = await conversations.addMessage(conversation.conversation_id, {
     role: 'user',
     content: input.value,
     metadata: {},
   })
-  await conversations.enqueue(conversation.conversation_id, { message_id: messageItem.message_id })
+  const run = await conversations.createRun(conversation.conversation_id, buildRunPayload(messageItem.message_id))
+  activateRun(run.run_id, run)
   input.value = ''
   scrollMainToBottom()
+  message.success('已发送并启动 Run')
 }
 
-async function startRun() {
-  const conversation = await ensureConversation()
-  const run = await conversations.createRun(conversation.conversation_id, runForm)
-  activateRun(run.run_id, run)
-  message.success('已从队列消息创建 Run')
+function validateRunConfig() {
+  if (chatMode.value === 'react' && !reactForm.executor_agent_id) {
+    message.warning('请选择 executor agent')
+    return false
+  }
+  if (chatMode.value === 'plan' && (!planForm.planner_agent_id || !planForm.executor_agent_ids.length || !planForm.context_id)) {
+    message.warning('请完整选择 planner、executors 和 step context')
+    return false
+  }
+  return true
+}
+
+function buildRunPayload(messageId) {
+  if (chatMode.value === 'react') {
+    return {
+      mode: 'react',
+      message_id: messageId,
+      executor_agent_id: reactForm.executor_agent_id,
+      auto_start: true,
+    }
+  }
+  return {
+    mode: 'plan',
+    message_id: messageId,
+    planner_agent_id: planForm.planner_agent_id,
+    executor_agent_ids: [...planForm.executor_agent_ids],
+    context_id: planForm.context_id,
+    max_replan_rounds: planForm.max_replan_rounds,
+    auto_start: true,
+  }
 }
 
 async function activateRun(runId, runRecord = null) {
@@ -456,9 +524,34 @@ async function cancelActiveRun() {
 
 async function selectConversation(id) {
   await conversations.selectConversation(id)
-  const runId = latestQueueRunId.value || conversations.messages.find((item) => item.run_id)?.run_id || ''
+  const runId = latestMessageRunId.value
   if (runId) activateRun(runId)
   conversationDrawerOpen.value = false
+}
+
+function confirmDeleteConversation(conversation = conversations.current) {
+  if (!conversation?.conversation_id) return
+  Modal.confirm({
+    title: '删除会话',
+    content: `确认删除「${conversation.title}」及其消息、Run 和事件吗？`,
+    okText: '删除',
+    okType: 'danger',
+    cancelText: '取消',
+    async onOk() {
+      const deletingCurrent = conversation.conversation_id === conversations.current?.conversation_id
+      await conversations.deleteConversation(conversation.conversation_id)
+      message.success('会话已删除')
+      if (!deletingCurrent) return
+
+      activeRunId.value = ''
+      selectedExecutor.value = ''
+      runs.current = null
+      const next = conversations.items[0]
+      if (next) {
+        await selectConversation(next.conversation_id)
+      }
+    },
+  })
 }
 
 function openEmbeddedRoute() {
@@ -502,18 +595,35 @@ async function resolveSelectedConfirmation(approved) {
   }
 }
 
-function queueColor(status) {
-  if (status === 'failed') return 'red'
-  if (status === 'done') return 'green'
-  if (status === 'processing') return 'blue'
-  return 'gold'
+function applyAgentDefaults() {
+  reactForm.executor_agent_id =
+    executorAgents.value.find((item) => item.agent_id === 'default_executor')?.agent_id ||
+    executorAgents.value[0]?.agent_id ||
+    reactForm.executor_agent_id
+  planForm.planner_agent_id =
+    plannerAgents.value.find((item) => item.agent_id === 'default_planner')?.agent_id ||
+    plannerAgents.value[0]?.agent_id ||
+    planForm.planner_agent_id
+  const defaultExecutor =
+    executorAgents.value.find((item) => item.agent_id === 'default_executor')?.agent_id ||
+    executorAgents.value[0]?.agent_id
+  planForm.executor_agent_ids = defaultExecutor ? [defaultExecutor] : planForm.executor_agent_ids
+  planForm.context_id =
+    stepContexts.value.find((item) => item.context_id === 'default_step')?.context_id ||
+    stepContexts.value[0]?.context_id ||
+    planForm.context_id
 }
 
 onMounted(async () => {
-  await conversations.fetchConversations()
+  await Promise.all([
+    conversations.fetchConversations(),
+    agents.fetchAgents(),
+    contexts.fetchContexts(),
+  ])
+  applyAgentDefaults()
   if (conversations.items[0]) {
     await conversations.selectConversation(conversations.items[0].conversation_id)
-    const runId = latestQueueRunId.value || conversations.messages.find((item) => item.run_id)?.run_id || ''
+    const runId = latestMessageRunId.value
     if (runId) activateRun(runId)
   }
 })
@@ -560,6 +670,7 @@ onMounted(async () => {
               @click="selectConversation(item.conversation_id)"
             >
               <a-list-item-meta :title="item.title" :description="item.conversation_id" />
+              <a-button danger size="small" @click.stop="confirmDeleteConversation(item)">删除</a-button>
             </a-list-item>
           </template>
         </a-list>
@@ -582,8 +693,9 @@ onMounted(async () => {
           <a-button class="mobile-conversation-button" @click="conversationDrawerOpen = true">
             会话
           </a-button>
-          <a-button @click="sendMessage" :disabled="!input.trim()">发送</a-button>
-          <a-button type="primary" @click="startRun">入队消息创建 Run</a-button>
+          <a-tag :color="chatMode === 'react' ? 'blue' : 'purple'">{{ modeConfigSummary }}</a-tag>
+          <a-button @click="configModalOpen = true">模型配置</a-button>
+          <a-button danger :disabled="!conversations.current" @click="confirmDeleteConversation()">删除会话</a-button>
           <a-button danger :loading="cancelingRun" :disabled="!canCancelActiveRun" @click="cancelActiveRun">
             中断 Run
           </a-button>
@@ -651,18 +763,10 @@ onMounted(async () => {
       <div class="chat-composer agent-composer">
         <a-textarea v-model:value="input" :rows="3" placeholder="输入给 Agent 的任务..." />
       </div>
-
-      <div class="queue-strip agent-queue-strip">
-        <a-tag
-          v-for="item in conversations.queue"
-          :key="item.queue_id"
-          class="queue-chip"
-          :color="queueColor(item.status)"
-          @click="activateRun(item.run_id)"
-        >
-          {{ item.status }} · {{ shortId(item.run_id || item.message_id) }}
-        </a-tag>
+      <div style="margin-top: 16px;justify-self: end;">
+        <a-button type="primary" @click="sendMessage" :disabled="!input.trim()">发送</a-button>
       </div>
+
     </main>
 
     <aside class="event-side executor-workbench">
@@ -687,7 +791,7 @@ onMounted(async () => {
         />
         <a-select v-model:value="selectedExecutor" class="mt-12" style="width: 100%" placeholder="executor">
           <a-select-option value="">全部执行者</a-select-option>
-          <a-select-option v-for="id in runs.current?.executor_agent_ids || runForm.executor_agent_ids" :key="id" :value="id">
+          <a-select-option v-for="id in executorOptions" :key="id" :value="id">
             {{ id }}
           </a-select-option>
         </a-select>
@@ -794,6 +898,108 @@ onMounted(async () => {
       </template>
     </a-drawer>
 
+    <a-modal
+      v-model:open="configModalOpen"
+      title="Agent 模型配置"
+      width="760px"
+      ok-text="完成"
+      cancel-text="关闭"
+      @ok="configModalOpen = false"
+    >
+      <a-form layout="vertical">
+        <a-form-item label="运行模式">
+          <a-segmented
+            v-model:value="chatMode"
+            :options="[
+              { label: 'React 单 Agent', value: 'react' },
+              { label: 'Plan 编排', value: 'plan' },
+            ]"
+          />
+        </a-form-item>
+
+        <template v-if="chatMode === 'react'">
+          <a-form-item label="Executor Agent">
+            <a-select
+              v-model:value="reactForm.executor_agent_id"
+              show-search
+              option-filter-prop="label"
+              placeholder="选择 executor agent"
+            >
+              <a-select-option
+                v-for="agent in executorAgents"
+                :key="agent.agent_id"
+                :value="agent.agent_id"
+                :label="`${agent.name} ${agent.agent_id}`"
+              >
+                {{ agent.name }} · {{ agent.agent_id }}
+              </a-select-option>
+            </a-select>
+          </a-form-item>
+        </template>
+
+        <template v-else>
+          <a-form-item label="Planner Agent">
+            <a-select
+              v-model:value="planForm.planner_agent_id"
+              show-search
+              option-filter-prop="label"
+              placeholder="选择 planner"
+            >
+              <a-select-option
+                v-for="agent in plannerAgents"
+                :key="agent.agent_id"
+                :value="agent.agent_id"
+                :label="`${agent.name} ${agent.agent_id}`"
+              >
+                {{ agent.name }} · {{ agent.agent_id }}
+              </a-select-option>
+            </a-select>
+          </a-form-item>
+
+          <a-form-item label="Executor Agents">
+            <a-select
+              v-model:value="planForm.executor_agent_ids"
+              mode="multiple"
+              show-search
+              option-filter-prop="label"
+              placeholder="选择一个或多个 executor"
+            >
+              <a-select-option
+                v-for="agent in executorAgents"
+                :key="agent.agent_id"
+                :value="agent.agent_id"
+                :label="`${agent.name} ${agent.agent_id}`"
+              >
+                {{ agent.name }} · {{ agent.agent_id }}
+              </a-select-option>
+            </a-select>
+          </a-form-item>
+
+          <a-form-item label="Step Context">
+            <a-select
+              v-model:value="planForm.context_id"
+              show-search
+              option-filter-prop="label"
+              placeholder="选择 step context"
+            >
+              <a-select-option
+                v-for="context in stepContexts"
+                :key="context.context_id"
+                :value="context.context_id"
+                :label="`${context.name} ${context.context_id}`"
+              >
+                {{ context.name }} · {{ context.context_id }}
+              </a-select-option>
+            </a-select>
+          </a-form-item>
+
+          <a-form-item label="Max Replan Rounds">
+            <a-input-number v-model:value="planForm.max_replan_rounds" :min="0" />
+          </a-form-item>
+        </template>
+      </a-form>
+    </a-modal>
+
     <a-drawer
       v-model:open="conversationDrawerOpen"
       title="会话"
@@ -811,6 +1017,7 @@ onMounted(async () => {
             @click="selectConversation(item.conversation_id)"
           >
             <a-list-item-meta :title="item.title" :description="item.conversation_id" />
+            <a-button danger size="small" @click.stop="confirmDeleteConversation(item)">删除</a-button>
           </a-list-item>
         </template>
       </a-list>

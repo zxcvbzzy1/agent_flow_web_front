@@ -45,5 +45,18 @@ export const useContextsStore = defineStore('contexts', {
         this.loading = false
       }
     },
+    async deleteContext(contextId) {
+      this.loading = true
+      try {
+        const response = await contextsApi.remove(contextId)
+        if (this.current?.context_id === contextId) {
+          this.current = null
+        }
+        await this.fetchContexts()
+        return response.item
+      } finally {
+        this.loading = false
+      }
+    },
   },
 })
