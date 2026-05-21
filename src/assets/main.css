@@ -289,6 +289,13 @@ body {
   align-items: start;
 }
 
+.context-console-grid {
+  display: grid;
+  grid-template-columns: minmax(300px, 0.72fr) minmax(520px, 1.25fr) minmax(360px, 0.85fr);
+  gap: 24px;
+  align-items: start;
+}
+
 .executor-column,
 .event-side {
   display: flex;
@@ -302,6 +309,36 @@ body {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
+}
+
+.context-add-row,
+.provider-stack,
+.strategy-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.context-add-row {
+  flex-direction: row;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.context-provider-card {
+  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid rgba(29, 36, 51, 0.07);
+}
+
+.strategy-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid rgba(29, 36, 51, 0.07);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.58);
 }
 
 .form-pair > * {
@@ -913,6 +950,7 @@ body {
   .two-column-grid.wide-left,
   .run-grid,
   .event-workbench,
+  .context-console-grid,
   .expanded-grid,
   .chat-shell,
   .event-side,
