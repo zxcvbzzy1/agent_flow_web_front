@@ -371,7 +371,7 @@ function convertPlanToString(jsonData) {
     return `步骤 ID: ${step.step_id}
 标题: ${step.title}
 指令说明: ${step.instruction}
-执行器 ID: ${step.executor_id}
+执行器名称: ${agentLabel(step.executor_id)}
 依赖步骤: ${dependsOnStr}`;
   });
   // 3. 用双换行和分割线把所有步骤拼接在一起
@@ -792,7 +792,7 @@ onMounted(async () => {
         <a-select v-model:value="selectedExecutor" class="mt-12" style="width: 100%" placeholder="executor">
           <a-select-option value="">全部执行者</a-select-option>
           <a-select-option v-for="id in executorOptions" :key="id" :value="id">
-            {{ id }}
+            {{ agentLabel(id) }}
           </a-select-option>
         </a-select>
       </a-card>

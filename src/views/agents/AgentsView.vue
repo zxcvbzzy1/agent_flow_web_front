@@ -10,6 +10,7 @@ const form = reactive({
   name: '新的执行者',
   agent_type: 'executor',
   context_id: 'default_executor',
+  description: '',
   role_prompt: `
 你是一个执行者
 
@@ -48,12 +49,19 @@ const columns = [
   { title: 'Agent ID', dataIndex: 'agent_id', key: 'agent_id' },
   { title: '名称', dataIndex: 'name', key: 'name' },
   { title: '类型', dataIndex: 'agent_type', key: 'agent_type', width: 120 },
+  { title: '能力描述', key: 'description' },
   { title: 'Context', dataIndex: 'context_id', key: 'context_id' },
   { title: '操作', key: 'actions', width: 120 },
 ]
 
 async function create() {
-  await agents.createAgent({ ...form, metadata: {} })
+  await agents.createAgent({
+    name: form.name,
+    agent_type: form.agent_type,
+    context_id: form.context_id,
+    role_prompt: form.role_prompt,
+    metadata: { description: form.description || '' },
+  })
   message.success('Agent 已创建')
 }
 
@@ -110,6 +118,9 @@ onMounted(async () => {
             <template v-if="column.key === 'agent_type'">
               <a-tag :color="record.agent_type === 'planner' ? 'purple' : 'blue'">{{ record.agent_type }}</a-tag>
             </template>
+            <template v-if="column.key === 'description'">
+              {{ record.metadata?.description || '-' }}
+            </template>
             <template v-if="column.key === 'context_id'">
               <a-tag>{{ record.context_id }}</a-tag>
             </template>
@@ -126,6 +137,13 @@ onMounted(async () => {
       <a-card class="panel-card" title="创建 Agent" :bordered="false">
         <a-form layout="vertical" >
           <a-form-item label="名称"><a-input v-model:value="form.name" /></a-form-item>
+          <a-form-item label="能力描述">
+            <a-textarea
+              v-model:value="form.description"
+              :rows="3"
+              placeholder="例如：擅长故事写作、润色、摘要或代码执行"
+            />
+          </a-form-item>
           <a-form-item label="类型">
             <a-select v-model:value="form.agent_type">
               <a-select-option value="executor">executor</a-select-option>

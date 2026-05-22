@@ -77,6 +77,7 @@ function defaultProvider(providerId = selectedProvider.value) {
       params: { memory_field: 'tool_respond', strategy_config: clone(memoryStrategy) },
     },
     executor_status: { provider_id: 'executor_status', enabled: true, params: {} },
+    available_executors: { provider_id: 'available_executors', enabled: true, params: {} },
     plan_observations: { provider_id: 'plan_observations', enabled: true, params: {} },
     plan_step_prompt: { provider_id: 'plan_step_prompt', enabled: true, params: {} },
   }
