@@ -11,32 +11,7 @@ const form = reactive({
   agent_type: 'executor',
   context_id: 'default_executor',
   description: '',
-  role_prompt: `
-你是一个执行者
-
-## 输出格式
-用 JSON 严格按以下格式回复：
-{{
-  "think": "你的思考过程",
-  "tool_calls": [
-    {{
-      "tool_name": "工具名",
-      "arguments": {{"参数名": "参数值"}},
-      "reasoning": "为什么调用这个工具"
-    }}
-  ],
-  "is_finished": false
-}}
-
-## 任务完成时输出
-{{
-  "think": "...",
-  "tool_calls": [],
-  "is_finished": true,
-  "finish_reason": "完成原因",
-  "final": "最终结果"
-}}
-  `,
+  role_prompt: '',
 })
 
 const contextOptions = computed(() => contexts.items)
